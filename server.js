@@ -11,6 +11,7 @@ const mongoUrl = process.env.MONGO_URL || "mongodb://localhost/movieDB";
 mongoose.connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true });
 mongoose.Promise = Promise;
 
+const ERR_SERVICE_UNAVAILABLE = "Service unavailable";
 const ERR_LOGIN_FAILED = "Username and/or password incorrect";
 const ERR_LOGOUT_FAILED = "Could not log out";
 const ERR_CREATE_USER_FAILED = "Could not create user";
@@ -22,19 +23,22 @@ const userSchema = new mongoose.Schema({
     minlength: [2, "Username is too short - min length 2 characters"],
     maxlength: [50, "Username is too long - max length 50 characters"],
     required: [true, "Username is required"],
+    trim: true,
   },
   email: {
     // TO-DO - Add min and max length?
     type: String,
     required: [true, "Email address is required"],
     unique: [true, "Email address already exists in database"],
-    validator: [isEmail, "Not a valid email"], // TO-DO Tested and validator is working but error message is not working
+    // validator: [isEmail, "Not a valid email"], // TO-DO Tested and validator is working but error message is not working
+    trim: true,
   },
   password: {
     type: String,
     required: [true, "Password is required"],
     minlength: [5, "Password is too short - min length 5 character"],
-    maxlength: [50, "Password is too long - max length 50 characters"], // TO-DO - Check if 50 is a good value, perhaps increase it.
+    maxlength: [130, "Password is too long - max length 50 characters"], // TO-DO - Check if 50 is a good value, perhaps increase it.
+    trim: true,
   },
   accessToken: {
     type: String,
@@ -49,7 +53,6 @@ const app = express();
 userSchema.pre("save", async function (next) {
   // Executes a function pre save which allows the password to be validated before it is hashed
   const user = this;
-
   if (!user.isModified("password")) {
     return next();
   }
@@ -75,6 +78,14 @@ const User = mongoose.model("User", userSchema);
 app.use(cors());
 app.use(bodyParser.json());
 
+app.use((req, res, next) => {
+  if (mongoose.connection.readyState === 1) {
+    next();
+  } else {
+    res.status(503).json({ error: ERR_SERVICE_UNAVAILABLE });
+  }
+});
+
 // GET - this will list of all endpoints
 app.get("/", (req, res) => {
   res.send(endpoints(app));
@@ -89,12 +100,12 @@ app.post("/users", async (req, res) => {
       email,
       password,
     }).save();
-    console.log({ userId: user._id, accessToken: user.accessToken });
     res.status(201).json({ userId: user._id, accessToken: user.accessToken });
   } catch (err) {
-    res
-      .status(400)
-      .json({ message: ERR_CREATE_USER_FAILED, error: err.errors });
+    res.status(400).json({
+      message: ERR_CREATE_USER_FAILED,
+      error: err,
+    });
   }
 });
 
@@ -103,10 +114,12 @@ app.post("/sessions", async (req, res) => {
     const { username, password } = req.body;
     const user = await User.findOne({ username });
     if (user && bcrypt.compareSync(password, user.password)) {
+      user.accessToken = crypto.randomBytes(128).toString("hex");
+      const updatedUser = await user.save();
       res.status(201).json({
         login: "success",
-        userId: user._id,
-        accessToken: user.accessToken,
+        userId: updatedUser._id,
+        accessToken: updatedUser.accessToken,
       });
     } else {
       throw ERR_LOGIN_FAILED;
@@ -117,18 +130,17 @@ app.post("/sessions", async (req, res) => {
 });
 
 // POST - logs user out and sets access token back to null
-app.post("/users/logout", authenticateUser);
-app.post("/users/logout", async (req, res) => {
+app.post("/sessions/logout", authenticateUser);
+app.post("/sessions/logout", async (req, res) => {
   const accessToken = req.header("Authorization");
 
-  console.log(`access token: ${accessToken}`);
-  // const user = await User.findOne({accessToken: accessToken})
+  console.log(`access token: ${accessToken}`); // TO-DO remove console log
   try {
-    await User.updateOne({ accessToken: accessToken }, { accessToken: null });
+    await User.updateOne({ accessToken: accessToken }, { accessToken: "0" });
     res.status(201).json({ success: true });
   } catch (err) {
     res.status(400).json({
-      message: `Null change did not work`,
+      message: ERR_LOGOUT_FAILED,
       error: err.errors,
     });
   }
