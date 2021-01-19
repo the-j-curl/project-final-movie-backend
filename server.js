@@ -8,7 +8,11 @@ import endpoints from "express-list-endpoints";
 import { isEmail } from "validator/lib/isEmail";
 
 const mongoUrl = process.env.MONGO_URL || "mongodb://localhost/movieDB";
-mongoose.connect(mongoUrl, { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.connect(mongoUrl, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  useCreateIndex: true,
+});
 mongoose.Promise = Promise;
 
 const ERR_SERVICE_UNAVAILABLE = "Service unavailable";
@@ -46,6 +50,20 @@ const userSchema = new mongoose.Schema({
   },
 });
 
+const movieSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+  movieId: {
+    type: Number,
+  },
+  watchList: {
+    type: Boolean,
+    default: false,
+  },
+});
+
 const port = process.env.PORT || 8080;
 const app = express();
 
@@ -73,6 +91,7 @@ const authenticateUser = async (req, res, next) => {
 };
 
 const User = mongoose.model("User", userSchema);
+const Movie = mongoose.model("Movie", movieSchema);
 
 // Middlewares to enable cors and json body parsing
 app.use(cors());
@@ -94,7 +113,7 @@ app.get("/", (req, res) => {
 // POST - signup creates a user
 app.post("/users", async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password } = req.body; // TO-D0 - should this line be removed
     const user = await new User({
       username,
       email,
@@ -106,6 +125,51 @@ app.post("/users", async (req, res) => {
       message: ERR_CREATE_USER_FAILED,
       error: err,
     });
+  }
+});
+
+// POST - add movie to watchlist
+app.post("/users/:userId/watchlist", async (req, res) => {
+  const { userId } = req.params;
+  const { movieId, watchList } = req.body;
+  try {
+    const movie = await new Movie({
+      userId,
+      movieId,
+      watchList,
+    }).save();
+    res.status(201).json({ mongoId: movie._id, movieId: movie.movieId });
+  } catch (err) {
+    res.status(400).json({
+      message: "Movie database error",
+      error: err,
+    });
+  }
+});
+
+// GET - This endpoint returns movies with a watchList: true value
+app.get("/users/:userId/watchlist", async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const userList = await Movie.find({ userId: userId, watchList: true });
+    res.status(200).json({ userList });
+  } catch (err) {
+    res.status(404).json({ message: "Watch list error" });
+  }
+});
+
+app.put("/users/:userId/watchlist", async (req, res) => {
+  const { userId } = req.params;
+  const { movieId, watchList } = req.body; // Movie ID validation required. Currently a nonexistant movieId returns a status 200 - TO-DO
+  try {
+    await Movie.updateOne(
+      { userId: userId, movieId: movieId },
+      { watchList: watchList }
+    );
+    console.log();
+    res.status(200).json({ watchList: watchList });
+  } catch (err) {
+    res.status(404).json({ error: err });
   }
 });
 
