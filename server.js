@@ -20,6 +20,10 @@ const ERR_LOGIN_FAILED = "Username and/or password incorrect";
 const ERR_LOGOUT_FAILED = "Could not log out";
 const ERR_CREATE_USER_FAILED = "Could not create user";
 const ERR_AUTHENTICATION = "Authentication error";
+const ERR_UNABLE_TO_SAVE_ITEM = "Could not save/update item";
+const ERR_NO_DATA_FOUND = "No data found";
+const ERR_ITEM_ALREADY_EXISTS = "Item already exits";
+const ERR_INVALID_REQUEST = "Invalid request";
 
 const userSchema = new mongoose.Schema({
   username: {
@@ -50,7 +54,7 @@ const userSchema = new mongoose.Schema({
   },
 });
 
-const movieSchema = new mongoose.Schema({
+const watchlistSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -58,7 +62,10 @@ const movieSchema = new mongoose.Schema({
   movieId: {
     type: Number,
   },
-  watchList: {
+  movieTitle: {
+    type: String,
+  },
+  watchlist: {
     type: Boolean,
     default: false,
   },
@@ -91,7 +98,7 @@ const authenticateUser = async (req, res, next) => {
 };
 
 const User = mongoose.model("User", userSchema);
-const Movie = mongoose.model("Movie", movieSchema);
+const Watchlist = mongoose.model("Watchlist", watchlistSchema);
 
 // Middlewares to enable cors and json body parsing
 app.use(cors());
@@ -131,45 +138,80 @@ app.post("/users", async (req, res) => {
 // POST - add movie to watchlist
 app.post("/users/:userId/watchlist", async (req, res) => {
   const { userId } = req.params;
-  const { movieId, watchList } = req.body;
+  const { movieId, movieTitle, watchlist } = req.body;
   try {
-    const movie = await new Movie({
-      userId,
-      movieId,
-      watchList,
-    }).save();
-    res.status(201).json({ mongoId: movie._id, movieId: movie.movieId });
+    const watchlistExist = await Watchlist.findOne({
+      userId: userId,
+      movieId: movieId,
+    });
+    if (!watchlistExist) {
+      try {
+        const movie = await new Watchlist({
+          userId,
+          movieId,
+          movieTitle,
+          watchlist,
+        }).save();
+        res.status(201).json({
+          mongoId: movie._id,
+          userId: movie.userId,
+          movieId: movie.movieId,
+          movieTitle: movie.movieTitle,
+        }); // TO-DO mongoID included for testing - to be removed
+      } catch (err) {
+        res.status(400).json({
+          message: ERR_UNABLE_TO_SAVE_ITEM,
+          error: err,
+        });
+      }
+    } else {
+      res.status(400).json({ message: ERR_ITEM_ALREADY_EXISTS });
+    }
   } catch (err) {
     res.status(400).json({
-      message: "Movie database error",
+      message: ERR_INVALID_REQUEST,
       error: err,
     });
   }
 });
 
-// GET - This endpoint returns movies with a watchList: true value
+// GET - This endpoint returns movies with a watchlist: true value
 app.get("/users/:userId/watchlist", async (req, res) => {
   const { userId } = req.params;
   try {
-    const userList = await Movie.find({ userId: userId, watchList: true });
-    res.status(200).json({ userList });
+    const userWatchlist = await Watchlist.find({
+      userId: userId,
+      watchlist: true,
+    });
+    res.status(200).json({ userWatchlist });
   } catch (err) {
-    res.status(404).json({ message: "Watch list error" });
+    res.status(404).json({ message: ERR_NO_DATA_FOUND, error: err });
   }
 });
 
+// PUT - This endpoint updates the watchlist boolean value
 app.put("/users/:userId/watchlist", async (req, res) => {
   const { userId } = req.params;
-  const { movieId, watchList } = req.body; // Movie ID validation required. Currently a nonexistant movieId returns a status 200 - TO-DO
+  const { movieId, watchlist } = req.body; // Movie ID validation required. Currently a nonexistant movieId returns a status 200 - TO-DO
   try {
-    await Movie.updateOne(
-      { userId: userId, movieId: movieId },
-      { watchList: watchList }
-    );
-    console.log();
-    res.status(200).json({ watchList: watchList });
+    const movieExist = await Watchlist.findOne({
+      movieId: movieId,
+    });
+    if (movieExist) {
+      try {
+        await Watchlist.updateOne(
+          { userId: userId, movieId: movieId },
+          { watchlist: watchlist }
+        );
+        res.status(200).json({ watchlist: watchlist });
+      } catch (err) {
+        res.status(400).json({ message: ERR_UNABLE_TO_SAVE_ITEM, error: err });
+      }
+    } else {
+      res.status(404).json({ message: ERR_UNABLE_TO_SAVE_ITEM });
+    }
   } catch (err) {
-    res.status(404).json({ error: err });
+    res.status(400).json({ message: ERR_INVALID_REQUEST, error: err });
   }
 });
 
