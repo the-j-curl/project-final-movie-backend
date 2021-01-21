@@ -1,61 +1,61 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import cors from 'cors';
-import mongoose from 'mongoose';
-import crypto from 'crypto';
-import bcrypt from 'bcrypt';
-import endpoints from 'express-list-endpoints';
-import { isEmail } from 'validator/lib/isEmail';
+import express from "express";
+import bodyParser from "body-parser";
+import cors from "cors";
+import mongoose from "mongoose";
+import crypto from "crypto";
+import bcrypt from "bcrypt";
+import endpoints from "express-list-endpoints";
+import { isEmail } from "validator/lib/isEmail";
 
-const mongoUrl = process.env.MONGO_URL || 'mongodb://localhost/movieDB';
+const mongoUrl = process.env.MONGO_URL || "mongodb://localhost/movieDB";
 mongoose.connect(mongoUrl, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  useCreateIndex: true
+  useCreateIndex: true,
 });
 mongoose.Promise = Promise;
 
-const ERR_SERVICE_UNAVAILABLE = 'Service unavailable';
-const ERR_LOGIN_FAILED = 'Username and/or password incorrect';
-const ERR_LOGOUT_FAILED = 'Could not log out';
-const ERR_CREATE_USER_FAILED = 'Could not create user';
-const ERR_AUTHENTICATION = 'Authentication error';
-const ERR_UNABLE_TO_SAVE_ITEM = 'Could not save/update item';
-const ERR_NO_DATA_FOUND = 'No data found';
-const ERR_ITEM_ALREADY_EXISTS = 'Item already exits';
-const ERR_INVALID_REQUEST = 'Invalid request';
+const ERR_SERVICE_UNAVAILABLE = "Service unavailable";
+const ERR_LOGIN_FAILED = "Username and/or password incorrect";
+const ERR_LOGOUT_FAILED = "Could not log out";
+const ERR_CREATE_USER_FAILED = "Could not create user";
+const ERR_AUTHENTICATION = "Authentication error";
+const ERR_UNABLE_TO_SAVE_ITEM = "Could not save/update item";
+const ERR_NO_DATA_FOUND = "No data found";
+const ERR_ITEM_ALREADY_EXISTS = "Item already exits";
+const ERR_INVALID_REQUEST = "Invalid request";
 
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
-    minlength: [2, 'Username is too short - min length 2 characters'],
-    maxlength: [50, 'Username is too long - max length 50 characters'],
-    required: [true, 'Username is required'],
-    trim: true
+    minlength: [2, "Username is too short - min length 2 characters"],
+    maxlength: [50, "Username is too long - max length 50 characters"],
+    required: [true, "Username is required"],
+    trim: true,
   },
   email: {
     // TO-DO - Add min and max length?
     type: String,
-    required: [true, 'Email address is required'],
-    unique: [true, 'Email address already exists in database'],
-    // validator: [isEmail, "Not a valid email"], // TO-DO Tested and validator is working but error message is not working
-    trim: true
+    required: [true, "Email address is required"],
+    unique: [true, "Email address already exists in database"],
+    validator: [isEmail, "Not a valid email"], // TO-DO Tested and validator is working but error message is not working
+    trim: true,
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
-    minlength: [5, 'Password is too short - min length 5 character'],
-    maxlength: [130, 'Password is too long - max length 50 characters'], // TO-DO - Check if 50 is a good value, perhaps increase it.
-    trim: true
+    required: [true, "Password is required"],
+    minlength: [5, "Password is too short - min length 5 character"],
+    maxlength: [130, "Password is too long - max length 50 characters"], // TO-DO - Check if 50 is a good value, perhaps increase it.
+    trim: true,
   },
   accessToken: {
     type: String,
-    default: () => crypto.randomBytes(128).toString('hex')
-  }
-  // Do we wanna have access to the whole document from watchlist and rating? If yes, hwo do we do it then?
+    default: () => crypto.randomBytes(128).toString("hex"),
+  },
+  // Do we wanna have access to the whole document from watchlist and rating? If yes, how do we do it then?
   // myWatchlist: [{
   //   type: mongoose.Schema.Types.ObjectId,
-  //   ref: 'watchlist'
+  //   ref: 'WatchMovie'
   // }],
   // myRating: [{
   //   type: mongoose.Schema.Types.ObjectId,
@@ -63,45 +63,48 @@ const userSchema = new mongoose.Schema({
   // }],
 });
 
-const watchlistSchema = new mongoose.Schema({
+const watchMovieSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    ref: "User",
   },
   movieId: {
-    type: Number
-  },
-  movieTitle: {
-    type: String
+    type: Number,
   },
   watchlist: {
     type: Boolean,
-    default: false
-  }
+    default: false, //Not needed - Use delete method
+    //add created at - updated at timestamps
+  },
 });
 
-// const ratingSchema = new mongoose.Schema({
-//   ratedBy: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'User'
-//   },
-//   movieId: {
-//     type: Number
-//   },
-//   movieTitle: {
-//     type: String,
-//   },
-//   rating: {
-//     type: Number
-//   }
-// });
+const ratingSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+  movieId: {
+    type: Number,
+  },
+  rating: {
+    type: Number,
+    default: 0,
+  },
+  comments: [
+    {
+      comment: String,
+      username: String,
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
+});
 
 // const movieSchema = new mongoose.Schema({
 //   movieId: {
 //     type: Number
-//   },
-//   movieTitle: {
-//     type: String,
 //   },
 //   ratingId: [ // Perhaps we wanna list how many person have rated this one
 //     {
@@ -112,7 +115,7 @@ const watchlistSchema = new mongoose.Schema({
 //   watchlistId: [ // Perhaps we wanna list how many person have added this one to their watchlist
 //     {
 //       type: mongoose.Schema.Types.ObjectId,
-//       ref: 'Watchlist'
+//       ref: 'WatchMovie'
 //     }
 //   ]
 // });
@@ -121,10 +124,10 @@ const port = process.env.PORT || 8080;
 const app = express();
 
 // Middleware to hash password before new user is saved
-userSchema.pre('save', async function (next) {
+userSchema.pre("save", async function (next) {
   // Executes a function pre save which allows the password to be validated before it is hashed
   const user = this;
-  if (!user.isModified('password')) {
+  if (!user.isModified("password")) {
     return next();
   }
   const salt = bcrypt.genSaltSync();
@@ -134,7 +137,7 @@ userSchema.pre('save', async function (next) {
 
 // Middleware to authenticate user
 const authenticateUser = async (req, res, next) => {
-  const user = await User.findOne({ accessToken: req.header('Authorization') });
+  const user = await User.findOne({ accessToken: req.header("Authorization") });
   if (user) {
     req.user = user;
     next();
@@ -143,8 +146,9 @@ const authenticateUser = async (req, res, next) => {
   }
 };
 
-const User = mongoose.model('User', userSchema);
-const Watchlist = mongoose.model('Watchlist', watchlistSchema);
+const User = mongoose.model("User", userSchema);
+const WatchMovie = mongoose.model("WatchMovie", watchMovieSchema);
+const Rating = mongoose.model("Rating", ratingSchema);
 
 // Middlewares to enable cors and json body parsing
 app.use(cors());
@@ -159,55 +163,54 @@ app.use((req, res, next) => {
 });
 
 // GET - this will list of all endpoints
-app.get('/', (req, res) => {
+app.get("/", (req, res) => {
   res.send(endpoints(app));
 });
 
 // POST - signup creates a user
-app.post('/users', async (req, res) => {
+app.post("/users", async (req, res) => {
   try {
     const { username, email, password } = req.body; // TO-D0 - should this line be removed
     const user = await new User({
       username,
       email,
-      password
+      password,
     }).save();
     res.status(201).json({ userId: user._id, accessToken: user.accessToken });
   } catch (err) {
     res.status(400).json({
       message: ERR_CREATE_USER_FAILED,
-      error: err
+      error: err,
     });
   }
 });
 
 // POST - add movie to watchlist
-app.post('/users/:userId/watchlist', async (req, res) => {
+app.post("/users/:userId/watchlist", authenticateUser);
+app.post("/users/:userId/watchlist", async (req, res) => {
   const { userId } = req.params;
-  const { movieId, movieTitle, watchlist } = req.body;
+  const { movieId, watchlist } = req.body;
   try {
-    const watchlistExist = await Watchlist.findOne({
+    const watchlistExist = await WatchMovie.findOne({
       userId: userId,
-      movieId: movieId
+      movieId: movieId,
     });
     if (!watchlistExist) {
       try {
-        const movie = await new Watchlist({
+        const movie = await new WatchMovie({
           userId,
           movieId,
-          movieTitle,
-          watchlist
+          watchlist,
         }).save();
         res.status(201).json({
           mongoId: movie._id,
           userId: movie.userId,
           movieId: movie.movieId,
-          movieTitle: movie.movieTitle
         }); // TO-DO mongoID included for testing - to be removed
       } catch (err) {
         res.status(400).json({
           message: ERR_UNABLE_TO_SAVE_ITEM,
-          error: err
+          error: err,
         });
       }
     } else {
@@ -216,18 +219,19 @@ app.post('/users/:userId/watchlist', async (req, res) => {
   } catch (err) {
     res.status(400).json({
       message: ERR_INVALID_REQUEST,
-      error: err
+      error: err,
     });
   }
 });
 
 // GET - This endpoint returns movies with a watchlist: true value
-app.get('/users/:userId/watchlist', async (req, res) => {
+app.get("/users/:userId/watchlist", authenticateUser);
+app.get("/users/:userId/watchlist", async (req, res) => {
   const { userId } = req.params;
   try {
-    const userWatchlist = await Watchlist.find({
+    const userWatchlist = await WatchMovie.find({
       userId: userId,
-      watchlist: true
+      watchlist: true,
     });
     res.status(200).json({ userWatchlist });
   } catch (err) {
@@ -236,16 +240,17 @@ app.get('/users/:userId/watchlist', async (req, res) => {
 });
 
 // PUT - This endpoint updates the watchlist boolean value
-app.put('/users/:userId/watchlist', async (req, res) => {
+app.put("/users/:userId/watchlist", authenticateUser);
+app.put("/users/:userId/watchlist", async (req, res) => {
   const { userId } = req.params;
   const { movieId, watchlist } = req.body; // Movie ID validation required. Currently a nonexistant movieId returns a status 200 - TO-DO
   try {
-    const movieExist = await Watchlist.findOne({
-      movieId: movieId
+    const movieExist = await WatchMovie.findOne({
+      movieId: movieId,
     });
     if (movieExist) {
       try {
-        await Watchlist.updateOne(
+        await WatchMovie.updateOne(
           { userId: userId, movieId: movieId },
           { watchlist: watchlist }
         );
@@ -261,17 +266,44 @@ app.put('/users/:userId/watchlist', async (req, res) => {
   }
 });
 
-app.post('/sessions', async (req, res) => {
+app.post("/comments/:movieId", authenticateUser);
+app.post("/comments/:movieId", async (req, res) => {
+  const { movieId } = req.params;
+  const { userId, comment, username } = req.body;
+  try {
+    const userComment = await new Rating({
+      userId,
+      movieId,
+    }).save();
+    await Rating.updateOne(
+      { userId: userId, movieId: movieId },
+      { $push: { comments: { comment, userName } } },
+      { new: true }
+    );
+    res.status(201).json({
+      mongoId: userComment._id,
+      userId: userComment.userId,
+      movieId: userComment.movieId,
+    }); // TO-DO mongoID included for testing - to be removed
+  } catch (err) {
+    res.status(400).json({
+      message: ERR_UNABLE_TO_SAVE_ITEM,
+      error: err,
+    });
+  }
+});
+
+app.post("/sessions", async (req, res) => {
   try {
     const { username, password } = req.body;
     const user = await User.findOne({ username });
     if (user && bcrypt.compareSync(password, user.password)) {
-      user.accessToken = crypto.randomBytes(128).toString('hex');
+      user.accessToken = crypto.randomBytes(128).toString("hex");
       const updatedUser = await user.save();
       res.status(201).json({
-        login: 'success',
+        login: "success",
         userId: updatedUser._id,
-        accessToken: updatedUser.accessToken
+        accessToken: updatedUser.accessToken,
       });
     } else {
       throw ERR_LOGIN_FAILED;
@@ -282,18 +314,18 @@ app.post('/sessions', async (req, res) => {
 });
 
 // POST - logs user out and sets access token back to null
-app.post('/sessions/logout', authenticateUser);
-app.post('/sessions/logout', async (req, res) => {
-  const accessToken = req.header('Authorization');
+app.post("/sessions/logout", authenticateUser);
+app.post("/sessions/logout", async (req, res) => {
+  const accessToken = req.user.accessToken; // We are able to access this value thanks to this line of code (from authenticateUser) req.user = user;
 
   console.log(`access token: ${accessToken}`); // TO-DO remove console log
   try {
-    await User.updateOne({ accessToken: accessToken }, { accessToken: '0' });
+    await User.updateOne({ accessToken: accessToken }, { accessToken: "0" });
     res.status(201).json({ success: true });
   } catch (err) {
     res.status(400).json({
       message: ERR_LOGOUT_FAILED,
-      error: err.errors
+      error: err.errors,
     });
   }
 });
