@@ -24,6 +24,7 @@ const ERR_UNABLE_TO_SAVE_ITEM = "Could not save/update item";
 const ERR_NO_DATA_FOUND = "No data found";
 const ERR_ITEM_ALREADY_EXISTS = "Item already exits";
 const ERR_INVALID_REQUEST = "Invalid request";
+const ERR_UNABLE_TO_DELETE_ITEM = " Could not delete item";
 
 const userSchema = new mongoose.Schema({
   username: {
@@ -185,6 +186,44 @@ app.post("/users", async (req, res) => {
   }
 });
 
+// POST - user login via accessToken
+app.post("/sessions", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findOne({ username });
+    if (user && bcrypt.compareSync(password, user.password)) {
+      user.accessToken = crypto.randomBytes(128).toString("hex");
+      const updatedUser = await user.save();
+      res.status(201).json({
+        login: "success",
+        userId: updatedUser._id,
+        accessToken: updatedUser.accessToken,
+      });
+    } else {
+      throw ERR_LOGIN_FAILED;
+    }
+  } catch (err) {
+    res.status(404).json({ error: err }); // 404 - not found | 400 - bad request | 401 unauthorised
+  }
+});
+
+// POST - logs user out and sets access token back to null
+app.post("/sessions/logout", authenticateUser);
+app.post("/sessions/logout", async (req, res) => {
+  const accessToken = req.user.accessToken; // We are able to access this value thanks to this line of code (from authenticateUser) req.user = user;
+
+  console.log(`access token: ${accessToken}`); // TO-DO remove console log
+  try {
+    await User.updateOne({ accessToken: accessToken }, { accessToken: "0" });
+    res.status(201).json({ success: true });
+  } catch (err) {
+    res.status(400).json({
+      message: ERR_LOGOUT_FAILED,
+      error: err.errors,
+    });
+  }
+});
+
 // POST - add movie to watchlist
 app.post("/users/:userId/watchlist", authenticateUser);
 app.post("/users/:userId/watchlist", async (req, res) => {
@@ -203,6 +242,7 @@ app.post("/users/:userId/watchlist", async (req, res) => {
           watchlist,
         }).save();
         res.status(201).json({
+          success: true,
           mongoId: movie._id,
           userId: movie.userId,
           movieId: movie.movieId,
@@ -254,7 +294,7 @@ app.put("/users/:userId/watchlist", async (req, res) => {
           { userId: userId, movieId: movieId },
           { watchlist: watchlist }
         );
-        res.status(200).json({ watchlist: watchlist });
+        res.status(200).json({ success: true, watchlist: watchlist });
       } catch (err) {
         res.status(400).json({ message: ERR_UNABLE_TO_SAVE_ITEM, error: err });
       }
@@ -266,6 +306,7 @@ app.put("/users/:userId/watchlist", async (req, res) => {
   }
 });
 
+// POST - add comment to a specific movie
 app.post("/comments/:movieId", authenticateUser);
 app.post("/comments/:movieId", async (req, res) => {
   const { movieId } = req.params;
@@ -277,10 +318,11 @@ app.post("/comments/:movieId", async (req, res) => {
     }).save();
     await Rating.updateOne(
       { userId: userId, movieId: movieId },
-      { $push: { comments: { comment, userName } } },
+      { $push: { comments: { comment, username } } },
       { new: true }
     );
     res.status(201).json({
+      success: true,
       mongoId: userComment._id,
       userId: userComment.userId,
       movieId: userComment.movieId,
@@ -293,43 +335,43 @@ app.post("/comments/:movieId", async (req, res) => {
   }
 });
 
-app.post("/sessions", async (req, res) => {
+// GET - This endpoint returns comments for a specific movie
+app.get("/comments/:movieId", async (req, res) => {
+  const { movieId } = req.params;
   try {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username });
-    if (user && bcrypt.compareSync(password, user.password)) {
-      user.accessToken = crypto.randomBytes(128).toString("hex");
-      const updatedUser = await user.save();
-      res.status(201).json({
-        login: "success",
-        userId: updatedUser._id,
-        accessToken: updatedUser.accessToken,
-      });
+    const comments = await Rating.find({
+      movieId: movieId,
+    });
+    res.status(200).json({ comments });
+  } catch (err) {
+    res.status(404).json({ message: ERR_NO_DATA_FOUND, error: err });
+  }
+});
+
+// DELETE - This endpoint delete one specific comment
+app.delete("/comments/:movieId/", authenticateUser);
+app.delete("/comments/:movieId", async (req, res) => {
+  const { movieId } = req.params;
+  const { userId, _id } = req.body;
+  try {
+    const deleteComment = await Rating.updateOne(
+      {
+        userId: userId,
+        movieId: movieId,
+      },
+      { $pull: { comments: { _id } } }
+    );
+    if (deleteComment) {
+      res.status(200).json({ success: true, message: deleteComment });
     } else {
-      throw ERR_LOGIN_FAILED;
+      res
+        .status(404)
+        .json({ success: false, message: ERR_UNABLE_TO_DELETE_ITEM });
     }
   } catch (err) {
-    res.status(404).json({ error: err }); // 404 - not found | 400 - bad request | 401 unauthorised
+    res.status(400).json({ message: ERR_INVALID_REQUEST, error: err });
   }
 });
-
-// POST - logs user out and sets access token back to null
-app.post("/sessions/logout", authenticateUser);
-app.post("/sessions/logout", async (req, res) => {
-  const accessToken = req.user.accessToken; // We are able to access this value thanks to this line of code (from authenticateUser) req.user = user;
-
-  console.log(`access token: ${accessToken}`); // TO-DO remove console log
-  try {
-    await User.updateOne({ accessToken: accessToken }, { accessToken: "0" });
-    res.status(201).json({ success: true });
-  } catch (err) {
-    res.status(400).json({
-      message: ERR_LOGOUT_FAILED,
-      error: err.errors,
-    });
-  }
-});
-
 // Start the server
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
