@@ -251,6 +251,7 @@ app.post("/users/:userId/watchlist", async (req, res) => {
           mongoId: movie._id,
           userId: movie.userId,
           movieId: movie.movieId,
+          watchlist: movie.watchlist,
         }); // TO-DO mongoID included for testing - to be removed
       } catch (err) {
         res.status(400).json({
