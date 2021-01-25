@@ -177,7 +177,11 @@ app.post("/users", async (req, res) => {
       email,
       password,
     }).save();
-    res.status(201).json({ userId: user._id, accessToken: user.accessToken });
+    res.status(201).json({
+      userId: user._id,
+      accessToken: user.accessToken,
+      username: user.username,
+    });
   } catch (err) {
     res.status(400).json({
       message: ERR_CREATE_USER_FAILED,
@@ -198,6 +202,7 @@ app.post("/sessions", async (req, res) => {
         login: "success",
         userId: updatedUser._id,
         accessToken: updatedUser.accessToken,
+        username: updatedUser.username,
       });
     } else {
       throw ERR_LOGIN_FAILED;
