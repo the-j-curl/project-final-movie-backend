@@ -214,22 +214,21 @@ app.post("/sessions", async (req, res) => {
   }
 });
 
+// Below code not used - Example of resetting an Access Token on log out
 // POST - logs user out and sets access token back to null
-app.post("/sessions/logout", authenticateUser);
-app.post("/sessions/logout", async (req, res) => {
-  const accessToken = req.user.accessToken; // We are able to access this value thanks to this line of code (from authenticateUser) req.user = user;
-
-  console.log(`access token: ${accessToken}`); // TO-DO remove console log
-  try {
-    await User.updateOne({ accessToken: accessToken }, { accessToken: "0" });
-    res.status(201).json({ success: true });
-  } catch (err) {
-    res.status(400).json({
-      message: ERR_LOGOUT_FAILED,
-      error: err.errors,
-    });
-  }
-});
+// app.post("/sessions/logout", authenticateUser);
+// app.post("/sessions/logout", async (req, res) => {
+//   const accessToken = req.user.accessToken; // We are able to access this value thanks to this line of code (from authenticateUser) req.user = user;
+//   try {
+//     await User.updateOne({ accessToken: accessToken }, { accessToken: "0" });
+//     res.status(201).json({ success: true });
+//   } catch (err) {
+//     res.status(400).json({
+//       message: ERR_LOGOUT_FAILED,
+//       error: err.errors,
+//     });
+//   }
+// });
 
 // PUT - checks if movie is in the watchlist and if not movie will be added to the watchlist.
 // If movie is in the database it will be updated (boolean value)
