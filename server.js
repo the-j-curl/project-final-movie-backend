@@ -293,27 +293,12 @@ app.put("/users/:userId/watchlist", async (req, res) => {
 app.get("/users/:userId/watchlist", authenticateUser);
 app.get("/users/:userId/watchlist", async (req, res) => {
   const { userId } = req.params;
-  const { movieId } = req.query;
   try {
-    if (!movieId) {
-      const userWatchlist = await WatchMovie.find({
-        userId: userId,
-        watchlist: true,
-      });
-      res.status(200).json({ userWatchlist });
-    }
-
-    if (movieId) {
-      const movie = await WatchMovie.findOne({
-        userId: userId,
-        movieId: movieId,
-      });
-      if (movie) {
-        res.status(200).json({ movie });
-      } else {
-        res.status(400).json({ message: ERR_NO_DATA_FOUND, error: err });
-      }
-    }
+    const userWatchlist = await WatchMovie.find({
+      userId: userId,
+      watchlist: true,
+    });
+    res.status(200).json({ userWatchlist });
   } catch (err) {
     res.status(404).json({ message: ERR_NO_DATA_FOUND, error: err });
   }
