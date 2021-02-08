@@ -17,7 +17,6 @@ mongoose.Promise = Promise;
 
 const ERR_SERVICE_UNAVAILABLE = "Service unavailable";
 const ERR_LOGIN_FAILED = "Username and/or password incorrect";
-const ERR_LOGOUT_FAILED = "Could not log out";
 const ERR_CREATE_USER_FAILED = "Could not create user";
 const ERR_AUTHENTICATION = "Authentication error";
 const ERR_UNABLE_TO_SAVE_ITEM = "Could not save/update item";
@@ -29,24 +28,24 @@ const ERR_UNABLE_TO_DELETE_ITEM = " Could not delete item";
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
+    unique: true,
+    required: [true, "Username is required"],
     minlength: [2, "Username is too short - min length 2 characters"],
     maxlength: [50, "Username is too long - max length 50 characters"],
-    required: [true, "Username is required"],
     trim: true,
   },
   email: {
     // TO-DO - Add min and max length?
     type: String,
     required: [true, "Email address is required"],
-    unique: [true, "Email address already exists in database"],
     validator: [isEmail, "Not a valid email"], // TO-DO Tested and validator is working but error message is not working
     trim: true,
   },
   password: {
     type: String,
     required: [true, "Password is required"],
-    minlength: [5, "Password is too short - min length 5 character"],
-    maxlength: [130, "Password is too long - max length 50 characters"], // TO-DO - Check if 50 is a good value, perhaps increase it.
+    minlength: [6, "Password is too short - min length 6 character"],
+    maxlength: [60, "Password is too long - max length 60 characters"],
     trim: true,
   },
   accessToken: {
