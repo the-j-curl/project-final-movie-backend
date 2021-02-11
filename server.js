@@ -7,7 +7,7 @@ import bcrypt from "bcrypt";
 import endpoints from "express-list-endpoints";
 import { isEmail } from "validator/lib/isEmail";
 
-const mongoUrl = process.env.MONGO_URL || "mongodb://localhost/movieDB";
+const mongoUrl = process.env.MONGO_URL || "mongodb://localhost/jymovieDB";
 mongoose.connect(mongoUrl, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -35,10 +35,11 @@ const userSchema = new mongoose.Schema({
     trim: true,
   },
   email: {
-    // TO-DO - Add min and max length?
     type: String,
     required: [true, "Email address is required"],
-    validator: [isEmail, "Not a valid email"], // TO-DO Tested and validator is working but error message is not working
+    minlength: [5, "Email is too short - min length 5 characters"],
+    maxlength: [100, "Email is too long - max length 100 characters"],
+    validator: [isEmail, "Not a valid email"], // TO-DO Tested and validator is not working
     trim: true,
   },
   password: {
@@ -52,17 +53,6 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: () => crypto.randomBytes(128).toString("hex"),
   },
-  // Do we wanna have access to the whole document from watchlist and rating? If yes, how do we do it then?
-  myWatchlist: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "WatchMovie",
-    },
-  ],
-  // myRating: [{
-  //   type: mongoose.Schema.Types.ObjectId,
-  //   ref: 'rating'
-  // }],
 });
 
 const watchMovieSchema = new mongoose.Schema({
@@ -75,8 +65,7 @@ const watchMovieSchema = new mongoose.Schema({
   },
   watchlist: {
     type: Boolean,
-    default: false, //Not needed - Use delete method
-    //add created at - updated at timestamps
+    default: false,
   },
 });
 
@@ -103,24 +92,6 @@ const ratingSchema = new mongoose.Schema({
     },
   ],
 });
-
-// const movieSchema = new mongoose.Schema({
-//   movieId: {
-//     type: Number
-//   },
-//   ratingId: [ // Perhaps we wanna list how many person have rated this one
-//     {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: 'Rating'
-//     }
-//   ],
-//   watchlistId: [ // Perhaps we wanna list how many person have added this one to their watchlist
-//     {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: 'WatchMovie'
-//     }
-//   ]
-// });
 
 const port = process.env.PORT || 8080;
 const app = express();
@@ -172,7 +143,7 @@ app.get("/", (req, res) => {
 // POST - signup creates a user
 app.post("/users", async (req, res) => {
   try {
-    const { username, email, password } = req.body; // TO-D0 - should this line be removed
+    const { username, email, password } = req.body;
     const user = await new User({
       username,
       email,
@@ -250,11 +221,7 @@ app.put("/users/:userId/watchlist", async (req, res) => {
         res.status(201).json({
           success: true,
           movie,
-          // mongoId: movie._id,
-          // userId: movie.userId,
-          // movieId: movie.movieId,
-          // watchlist: movie.watchlist,
-        }); // TO-DO mongoID included for testing - to be removed
+        });
       } catch (err) {
         res.status(400).json({
           message: ERR_UNABLE_TO_SAVE_ITEM,
@@ -265,14 +232,12 @@ app.put("/users/:userId/watchlist", async (req, res) => {
       try {
         const updated = await WatchMovie.findOneAndUpdate(
           { userId: userId, movieId: movieId },
-          // { watchlist: watchlist }
           req.body,
           { new: true }
         );
         res.status(200).json({
           success: true,
           updated,
-          // watchlist: watchlist,
         });
       } catch (err) {
         res.status(400).json({ message: ERR_UNABLE_TO_SAVE_ITEM, error: err });
@@ -288,7 +253,7 @@ app.put("/users/:userId/watchlist", async (req, res) => {
   }
 });
 
-// GET - This endpoint returns movies with a watchlist: true value
+// GET - returns movies with a watchlist: true value
 app.get("/users/:userId/watchlist", authenticateUser);
 app.get("/users/:userId/watchlist", async (req, res) => {
   const { userId } = req.params;
@@ -320,10 +285,9 @@ app.post("/comments/:movieId", async (req, res) => {
     );
     res.status(201).json({
       success: true,
-      mongoId: userComment._id,
       userId: userComment.userId,
       movieId: userComment.movieId,
-    }); // TO-DO mongoID included for testing - to be removed
+    });
   } catch (err) {
     res.status(400).json({
       message: ERR_UNABLE_TO_SAVE_ITEM,
@@ -336,10 +300,22 @@ app.post("/comments/:movieId", async (req, res) => {
 app.get("/comments/:movieId", async (req, res) => {
   const { movieId } = req.params;
   try {
-    const comments = await Rating.find({
+    const movieReviews = await Rating.find({
       movieId: movieId,
     });
-    res.status(200).json({ comments });
+
+    let comments = [];
+    movieReviews.map((commentedMovie) =>
+      comments.push(commentedMovie.comments)
+    );
+
+    let allComments = [].concat.apply([], comments);
+
+    const sortedComments = allComments.sort(
+      (a, b) => b.createdAt - a.createdAt
+    );
+
+    res.status(200).json({ sortedComments });
   } catch (err) {
     res.status(404).json({ message: ERR_NO_DATA_FOUND, error: err });
   }
