@@ -39,8 +39,7 @@ const userSchema = new mongoose.Schema({
     required: [true, "Email address is required"],
     minlength: [5, "Email is too short - min length 5 characters"],
     maxlength: [100, "Email is too long - max length 100 characters"],
-    validator: [isEmail, "Not a valid email"], // TO-DO Tested and validator is not working
-    trim: true,
+    validator: [isEmail, "Not a valid email"],
   },
   password: {
     type: String,
@@ -184,22 +183,6 @@ app.post("/sessions", async (req, res) => {
   }
 });
 
-// Below code not used - Example of resetting an Access Token on log out
-// POST - logs user out and sets access token back to null
-// app.post("/sessions/logout", authenticateUser);
-// app.post("/sessions/logout", async (req, res) => {
-//   const accessToken = req.user.accessToken; // We are able to access this value thanks to this line of code (from authenticateUser) req.user = user;
-//   try {
-//     await User.updateOne({ accessToken: accessToken }, { accessToken: "0" });
-//     res.status(201).json({ success: true });
-//   } catch (err) {
-//     res.status(400).json({
-//       message: ERR_LOGOUT_FAILED,
-//       error: err.errors,
-//     });
-//   }
-// });
-
 // PUT - checks if movie is in the watchlist and if not movie will be added to the watchlist.
 // If movie is in the database it will be updated (boolean value)
 app.put("/users/:userId/watchlist", authenticateUser);
@@ -305,9 +288,7 @@ app.get("/comments/:movieId", async (req, res) => {
     });
 
     let comments = [];
-    movieReviews.map((commentedMovie) =>
-      comments.push(commentedMovie.comments)
-    );
+    movieReviews.map(commentedMovie => comments.push(commentedMovie.comments));
 
     let allComments = [].concat.apply([], comments);
 
