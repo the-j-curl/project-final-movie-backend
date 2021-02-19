@@ -39,7 +39,7 @@ const userSchema = new mongoose.Schema({
     required: [true, "Email address is required"],
     minlength: [5, "Email is too short - min length 5 characters"],
     maxlength: [100, "Email is too long - max length 100 characters"],
-    validator: [isEmail, "Not a valid email"], // Tested and validator is not working
+    validator: [isEmail, "Not a valid email"],
     trim: true,
   },
   password: {
