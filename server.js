@@ -39,7 +39,8 @@ const userSchema = new mongoose.Schema({
     required: [true, "Email address is required"],
     minlength: [5, "Email is too short - min length 5 characters"],
     maxlength: [100, "Email is too long - max length 100 characters"],
-    validator: [isEmail, "Not a valid email"],
+    validator: [isEmail, "Not a valid email"], // Tested and validator is not working
+    trim: true,
   },
   password: {
     type: String,
@@ -218,7 +219,7 @@ app.put("/users/:userId/watchlist", async (req, res) => {
           req.body,
           { new: true }
         );
-        res.status(200).json({
+        res.status(201).json({
           success: true,
           updated,
         });
@@ -257,23 +258,30 @@ app.post("/comments/:movieId", async (req, res) => {
   const { movieId } = req.params;
   const { userId, comment, username } = req.body;
   try {
-    const userComment = await new Rating({
-      userId,
-      movieId,
-    }).save();
-    await Rating.updateOne(
+    const ratingExist = await Rating.findOne({
+      userId: userId,
+      movieId: movieId,
+    });
+
+    if (!ratingExist) {
+      await new Rating({
+        userId,
+        movieId,
+      }).save();
+    }
+
+    const updated = await Rating.findOneAndUpdate(
       { userId: userId, movieId: movieId },
       { $push: { comments: { comment, username } } },
       { new: true }
     );
     res.status(201).json({
       success: true,
-      userId: userComment.userId,
-      movieId: userComment.movieId,
+      updated,
     });
   } catch (err) {
     res.status(400).json({
-      message: ERR_UNABLE_TO_SAVE_ITEM,
+      message: ERR_INVALID_REQUEST,
       error: err,
     });
   }
